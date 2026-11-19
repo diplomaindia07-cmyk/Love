@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Love Book - 65 Pages</title>
+    <!-- PDF.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #121212;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        .header {
+            position: absolute;
+            top: 15px;
+            text-align: center;
+            z-index: 10;
+        }
+        h1 { margin: 0 0 10px 0; font-size: 1.5rem; color: #ff6b81; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 15px;
+            border-radius: 20px;
+            backdrop-filter: blur(5px);
+        }
+        button, input[type="file"] {
+            background: #ff4757;
+            border: none;
+            color: white;
+            padding: 6px 14px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        button:hover { background: #ff6b81; }
+        #fileInput { display: none; }
+        .file-label {
+            background: #2ed573;
+            padding: 6px 14px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+        .file-label:hover { background: #7bed9f; }
+
+        /* Book Container */
+        .book-container {
+            width: 90vw;
+            max-width: 450px;
+            height: 75vh;
+            max-height: 700px;
+            perspective: 1500px;
+            margin-top: 50px;
+        }
+        .book {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.5s;
+        }
+        .page {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            transform-origin: left;
+            transform-style: preserve-3d;
+            transition: transform 0.8s cubic-bezier(0.645, 0.045, 0.355, 1);
+            box-shadow: -5px 0 20px rgba(0,0,0,0.4);
+            background: #fff;
+            border-radius: 0 8px 8px 0;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .page canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
+        .page.flipped {
+            transform: rotateY(-180deg);
+        }
+        .nav-info {
+            position: absolute;
+            bottom: 10px;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 12px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>📖 3D Love Book (65 Pages)</h1>
+        <div class="controls">
+            <label class="file-label" for="fileInput">📁 Load love.pdf</label>
+            <input type="file" id="fileInput" accept="application/pdf">
+            <span id="pageInfo">Page: 0 / 65</span>
+        </div>
+    </div>
+
+    <div class="book-container">
+        <div class="book" id="book"></div>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        let pdfDoc = null;
+        let totalPages = 0;
+        let pagesData = [];
+        let curPageIndex = 0;
+
+        // Automatically load love.pdf if it's in the same folder
+        window.addEventListener('DOMContentLoaded', () => {
+            loadPDF('love.pdf');
+        });
+
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const fileReader = new FileReader();
+                fileReader.onload = function() {
+                    const typedarray = new Uint8Array(this.result);
+                    loadPDF(typedarray);
+                };
+                fileReader.readAsArrayBuffer(file);
+            }
+        });
+
+        async function loadPDF(src) {
+            try {
+                const loadingTask = pdfjsLib.getDocument(src);
+                pdfDoc = await loadingTask.promise;
+                totalPages = pdfDoc.numPages;
+                document.getElementById('pageInfo').innerText = `Total Pages: ${totalPages}`;
+                
+                const book = document.getElementById('book');
+                book.innerHTML = '';
+                pagesData = [];
+
+                for (let i = 1; i <= totalPages; i++) {
+                    const pageDiv = document.createElement('div');
+                    pageDiv.className = 'page';
+                    pageDiv.style.zIndex = totalPages - i;
+
+                    const canvas = document.createElement('canvas');
+                    pageDiv.appendChild(canvas);
+                    book.appendChild(pageDiv);
+
+                    pagesData.push({ element: pageDiv, canvas: canvas, pageNum: i });
+
+                    // Render page into canvas
+                    renderPageToCanvas(i, canvas);
+                }
+
+                initBookInteraction();
+            } catch (error) {
+                console.log("Auto-load love.pdf failed or waiting for manual upload:", error);
+            }
+        }
+
+        async function renderPageToCanvas(num, canvas) {
+            const page = await pdfDoc.getPage(num);
+            const viewport = page.getViewport({ scale: 2.0 }); // High resolution
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            await page.render({
+                canvasContext: context,
+                viewport: viewport
+            }).promise;
+        }
+
+        function initBookInteraction() {
+            const pageElements = document.querySelectorAll('.page');
+            
+            pageElements.forEach((page, index) => {
+                page.addEventListener('click', (e) => {
+                    const rect = page.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    
+                    if (clickX > rect.width / 2) {
+                        // Flip Forward (Right to Left)
+                        if (!page.classList.contains('flipped')) {
+                            page.classList.add('flipped');
+                            curPageIndex = index + 1;
+                            updateZIndices();
+                        }
+                    } else {
+                        // Flip Backward (Left to Right)
+                        if (index > 0 && pageElements[index - 1].classList.contains('flipped')) {
+                            pageElements[index - 1].classList.remove('flipped');
+                            curPageIndex = index - 1;
+                            updateZIndices();
+                        }
+                    }
+                    document.getElementById('pageInfo').innerText = `Page: ${Math.min(curPageIndex + 1, totalPages)} / ${totalPages}`;
+                });
+            });
+        }
+
+        function updateZIndices() {
+            const pageElements = document.querySelectorAll('.page');
+            pageElements.forEach((page, index) => {
+                if (page.classList.contains('flipped')) {
+                    page.style.zIndex = index;
+                } else {
+                    page.style.zIndex = totalPages - index;
+                }
+            });
+        }
+    </script>
+</body>
+  </html>
+  
